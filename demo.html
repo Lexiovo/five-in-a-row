@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能五子棋对战 (已修复)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+        
+        .game-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .game-rules {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 600px;
+        }
+        
+        .game-canvas {
+            margin: 0 auto;
+            display: block;
+        }
+        
+        .footer {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        /* 调试信息样式 */
+        .debug-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-title">🎮 智能五子棋对战</div>
+        <div class="game-rules">
+            黑棋先行，点击棋盘落子。AI会自动回应。五子连珠获胜！<br>
+            游戏结束后点击鼠标重新开始。
+        </div>
+        <div id="canvas-container">
+            <!-- p5.js will create the canvas here -->
+        </div>
+    </div>
+    <div class="footer">
+        © 2025 智能五子棋游戏 | 点击棋盘开始对战
+    </div>
+
+    <script>
+        let board = []; // 棋盘数组
+        let currentPlayer = 1; // 1为黑棋（玩家），2为白棋（AI）
+        let gameOver = false;
+        let winner = 0;
+        let boardSize = 15; // 15x15棋盘
+        let cellSize;
+        let margin;
+        let aiPlayer = 2; // AI玩家固定为白棋
+        let canvas;
+
+        function setup() {
+            // 创建画布并添加到指定容器
+            canvas = createCanvas(600, 600);
+            canvas.parent('canvas-container');
+            canvas.addClass('game-canvas');
+            
+            cellSize = width / (boardSize + 1);
+            margin = cellSize;
+            
+            // 初始化棋盘
+            initializeBoard();
+        }
+
+        function initializeBoard() {
+            board = [];
+            for (let i = 0; i < boardSize; i++) {
+                board[i] = [];
+                for (let j = 0; j < boardSize; j++) {
+                    board[i][j] = 0; // 0表示空位
+                }
+            }
+            currentPlayer = 1; // 玩家先手（黑棋）
+            gameOver = false;
+            winner = 0;
+        }
+
+        function draw() {
+            background(220, 179, 92); // 棋盘背景色（木纹色）
+            drawBoard();
+            drawPieces();
+            
+            if (gameOver) {
+                displayWinner();
+            }
+            
+            // 绘制调试信息（可选，部署时可删除）
+            drawDebugInfo();
+        }
+
+        function drawDebugInfo() {
+            fill(0);
+            noStroke();
+            textSize(12);
+            textAlign(LEFT, TOP);
+            text(`当前玩家: ${currentPlayer === 1 ? '黑棋(玩家)' : '白棋(AI)'}`, 10, 10);
+            if (winner) {
+                text(`获胜者: ${winner === 1 ? '黑棋(玩家)' : '白棋(AI)'}`, 10, 30);
+            }
+        }
+
+        function drawBoard() {
+            stroke(0);
+            strokeWeight(1);
+            
+            // 绘制横线
+            for (let i = 0; i < boardSize; i++) {
+                line(margin, margin + i * cellSize, width - margin, margin + i * cellSize);
+            }
+            
+            // 绘制竖线
+            for (let j = 0; j < boardSize; j++) {
+                line(margin + j * cellSize, margin, margin + j * cellSize, height - margin);
+            }
+            
+            // 绘制天元和星位
+            fill(0);
+            noStroke();
+            let starPoints = [
+                {x: 3, y: 3}, {x: 3, y: 11}, {x: 11, y: 3}, {x: 11, y: 11}, // 四角星位
+                {x: 7, y: 7} // 天元
+            ];
+            
+            for (let point of starPoints) {
+                circle(margin + point.x * cellSize, margin + point.y * cellSize, 8);
+            }
+        }
+
+        function drawPieces() {
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    if (board[i][j] === 1) {
+                        // 黑棋 - 确保颜色正确
+                        fill(0); // 纯黑色
+                        stroke(0); // 黑色边框
+                        strokeWeight(2);
+                        circle(margin + j * cellSize, margin + i * cellSize, cellSize * 0.8);
+                    } else if (board[i][j] === 2) {
+                        // 白棋 - 确保颜色正确
+                        fill(255); // 纯白色
+                        stroke(0); // 黑色边框
+                        strokeWeight(2);
+                        circle(margin + j * cellSize, margin + i * cellSize, cellSize * 0.8);
+                    }
+                }
+            }
+        }
+
+        function mousePressed() {
+            if (gameOver) {
+                // 重新开始游戏
+                console.log("游戏结束，重新开始");
+                initializeBoard();
+                return;
+            }
+            
+            // 只有当前是玩家回合时才能落子
+            if (currentPlayer !== 1) {
+                console.log("不是玩家回合，当前玩家:", currentPlayer);
+                return;
+            }
+            
+            // 计算鼠标点击位置对应的棋盘坐标
+            let col = Math.round((mouseX - margin) / cellSize);
+            let row = Math.round((mouseY - margin) / cellSize);
+            
+            // 检查是否在有效范围内
+            if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+                // 检查该位置是否为空
+                if (board[row][col] === 0) {
+                    console.log(`玩家在位置 (${row}, ${col}) 落子`);
+                    
+                    // 玩家落子（黑棋）- 明确设置为1
+                    board[row][col] = 1;
+                    
+                    // 强制立即重绘
+                    redraw();
+                    
+                    // 检查是否获胜
+                    if (checkWin(row, col)) {
+                        console.log("玩家获胜！");
+                        gameOver = true;
+                        winner = 1;
+                    } else {
+                        // 切换到AI玩家 - 明确设置为2
+                        currentPlayer = 2;
+                        console.log("切换到AI回合");
+                        
+                        // 延迟AI落子，让玩家看到自己的落子效果
+                        setTimeout(() => {
+                            if (!gameOver) {
+                                aiMove();
+                            }
+                        }, 500);
+                    }
+                } else {
+                    console.log("该位置已有棋子");
+                }
+            }
+        }
+
+        function aiMove() {
+            console.log("AI开始思考...");
+            if (gameOver) return;
+            
+            // 寻找最佳落子位置
+            let bestMove = findBestMove();
+            
+            if (bestMove) {
+                console.log(`AI在位置 (${bestMove.row}, ${bestMove.col}) 落子`);
+                // AI落子 - 明确设置为2
+                board[bestMove.row][bestMove.col] = 2;
+                
+                // 检查AI是否获胜
+                if (checkWin(bestMove.row, bestMove.col)) {
+                    console.log("AI获胜！");
+                    gameOver = true;
+                    winner = 2;
+                } else {
+                    // 切换回玩家
+                    currentPlayer = 1;
+                    console.log("切换回玩家回合");
+                }
+            }
+        }
+
+        function findBestMove() {
+            // 评估棋盘上所有空位的得分，选择得分最高的位置
+            let bestScore = -Infinity;
+            let bestMove = null;
+            
+            // 如果棋盘上只有一颗子，这是AI的第一步
+            let emptyCount = 0;
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    if (board[i][j] === 0) emptyCount++;
+                }
+            }
+            
+            // Bug修复：增加了对中心点是否被占用的判断
+            if (emptyCount === boardSize * boardSize - 1) {
+                if (board[7][7] === 0) {
+                    return {row: 7, col: 7}; // AI第一步下在天元位置
+                } else {
+                    return {row: 7, col: 8}; // 如果中心被占，下在旁边
+                }
+            }
+            
+            // 评估每个空位
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    if (board[i][j] === 0) {
+                        let score = evaluatePosition(i, j);
+                        
+                        // 优先选择能直接获胜的位置
+                        board[i][j] = 2; // 临时设置为AI棋子
+                        if (checkWin(i, j)) {
+                            board[i][j] = 0;
+                            return {row: i, col: j};
+                        }
+                        board[i][j] = 0;
+                        
+                        // 检查是否需要防守（阻止玩家获胜）
+                        board[i][j] = 1; // 临时设置为玩家棋子
+                        if (checkWin(i, j)) {
+                            board[i][j] = 0;
+                            return {row: i, col: j}; // 阻止玩家获胜
+                        }
+                        board[i][j] = 0;
+                        
+                        // 选择得分最高的位置
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMove = {row: i, col: j};
+                        }
+                    }
+                }
+            }
+            
+            return bestMove;
+        }
+
+        function evaluatePosition(row, col) {
+            let score = 0;
+            
+            // 评估在(row, col)位置落子的价值
+            // 检查四个方向：横向、纵向、左斜、右斜
+            const directions = [
+                [0, 1],   // 横向
+                [1, 0],   // 纵向
+                [1, 1],   // 右斜（从左上到右下）
+                [1, -1]   // 左斜（从右上到左下）
+            ];
+            
+            // 评估AI落子后的价值
+            for (let dir of directions) {
+                score += evaluateDirection(row, col, dir, 2); // AI是2
+            }
+            
+            // 评估玩家落子后的价值（防守）
+            for (let dir of directions) {
+                score += evaluateDirection(row, col, dir, 1) * 0.8; // 防守价值稍低
+            }
+            
+            // 中心位置加分
+            let centerRow = Math.floor(boardSize / 2);
+            let centerCol = Math.floor(boardSize / 2);
+            let distanceToCenter = Math.abs(row - centerRow) + Math.abs(col - centerCol);
+            score += (boardSize - distanceToCenter) * 2; // 距离中心越近，加分越多
+            
+            return score;
+        }
+
+        function evaluateDirection(row, col, direction, player) {
+            let score = 0;
+            
+            // 计算在指定方向上连续的棋子数量
+            let count = 1; // 包含当前位置
+            let openEnds = 0; // 开放端数量
+            
+            // 向正方向检查
+            let r = row + direction[0];
+            let c = col + direction[1];
+            let blocked = false;
+            
+            while (r >= 0 && r < boardSize && c >= 0 && c < boardSize) {
+                if (board[r][c] === player) {
+                    count++;
+                } else if (board[r][c] === 0) {
+                    openEnds++;
+                    break;
+                } else {
+                    blocked = true;
+                    break;
+                }
+                r += direction[0];
+                c += direction[1];
+            }
+            
+            if (!blocked && (r < 0 || r >= boardSize || c < 0 || c >= boardSize)) {
+                openEnds++;
+            }
+            
+            // 向反方向检查
+            r = row - direction[0];
+            c = col - direction[1];
+            blocked = false;
+            
+            while (r >= 0 && r < boardSize && c >= 0 && c < boardSize) {
+                if (board[r][c] === player) {
+                    count++;
+                } else if (board[r][c] === 0) {
+                    openEnds++;
+                    break;
+                } else {
+                    blocked = true;
+                    break;
+                }
+                r -= direction[0];
+                c -= direction[1];
+            }
+            
+            if (!blocked && (r < 0 || r >= boardSize || c < 0 || c >= boardSize)) {
+                openEnds++;
+            }
+            
+            // 根据连续棋子数量和开放端数量评分
+            if (count >= 5) {
+                score += 100000; // 获胜
+            } else if (count === 4) {
+                if (openEnds >= 2) {
+                    score += 50000; // 活四
+                } else if (openEnds === 1) {
+                    score += 10000; // 冲四
+                }
+            } else if (count === 3) {
+                if (openEnds >= 2) {
+                    score += 5000; // 活三
+                } else if (openEnds === 1) {
+                    score += 1000; // 眠三
+                }
+            } else if (count === 2) {
+                if (openEnds >= 2) {
+                    score += 500; // 活二
+                } else if (openEnds === 1) {
+                    score += 100; // 眠二
+                }
+            } else if (count === 1) {
+                if (openEnds >= 2) {
+                    score += 50; // 活一
+                }
+            }
+            
+            return score;
+        }
+
+        function checkWin(row, col) {
+            // 检查四个方向：横向、纵向、左斜、右斜
+            const directions = [
+                [0, 1],   // 横向
+                [1, 0],   // 纵向
+                [1, 1],   // 右斜（从左上到右下）
+                [1, -1]   // 左斜（从右上到左下）
+            ];
+            
+            for (let dir of directions) {
+                let count = 1; // 包含当前落子位置
+                
+                // 向正方向检查
+                let r = row + dir[0];
+                let c = col + dir[1];
+                while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board[r][c] === board[row][col]) {
+                    count++;
+                    r += dir[0];
+                    c += dir[1];
+                }
+                
+                // 向反方向检查
+                r = row - dir[0];
+                c = col - dir[1];
+                while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board[r][c] === board[row][col]) {
+                    count++;
+                    r -= dir[0];
+                    c -= dir[1];
+                }
+                
+                // 如果连续5个或以上，获胜
+                if (count >= 5) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        function displayWinner() {
+            textSize(32);
+            textAlign(CENTER, CENTER);
+            fill(255, 0, 0);
+            if (winner === 1) {
+                text("恭喜你获胜！", width / 2, height / 2);
+            } else if (winner === 2) {
+                text("AI获胜！", width / 2, height / 2);
+            }
+            
+            // 提示重新开始
+            textSize(16);
+            text("点击鼠标重新开始", width / 2, height / 2 + 40);
+        }
+    </script>
+</body>
+</html>
